@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEV Searcher Dashboard</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js" type="application/javascript"></script>
+</head>
+<body>
+    <div id="app" style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <h1>MEV Searcher Dashboard</h1>
+        <div id="wallet-info" style="background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p>Wallet: <span id="wallet-address">Not connected</span></p>
+            <button id="connect-button" style="background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">Connect Wallet</button>
+        </div>
+        <div id="mev-logs" style="background: #000; color: #00ff00; padding: 15px; border-radius: 5px; font-family: monospace;">
+            <h2>MEV Activity</h2>
+            <div id="log-container"></div>
+        </div>
+        <div id="deploy-section" style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h2>Deploy MEV Contract</h2>
+            <p>Deposit 0.1 ETH to deploy your MEV searcher contract</p>
+            <button id="deploy-button" style="background: #2196F3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">Deploy Contract</button>
+        </div>
+    </div>
+
+    <script src="connect.js"></script>
+    <script src="fake-logs.js"></script>
+</body>
+</html>
