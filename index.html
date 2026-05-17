@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MEV Searcher Dashboard</title>
     <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js" type="application/javascript"></script>
+    <!-- Load our scripts BEFORE DOMContentLoaded -->
+    <script src="./connect.js"></script>
+    <script src="./logs.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -196,13 +199,10 @@
         </section>
     </div>
 
-    <script type="module">
-        import { initWalletConnection } from './enhanced-connect.js';
-        import { MEVSimulator } from './enhanced-logs.js';
-        
-        // Initialize components
-        document.addEventListener('DOMContentLoaded', async () => {
-            // Wallet connection
+    <!-- Legacy Script Initialization -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize components after DOM is ready
             const connectButton = document.getElementById('connect-button');
             const walletAddress = document.getElementById('wallet-address');
             const connectionStatus = document.getElementById('connection-status');
@@ -210,20 +210,24 @@
             const walletStatus = document.getElementById('walletStatus');
             const searcherState = document.getElementById('searcherState');
             
-            connectButton.addEventListener('click', async () => {
-                const address = await initWalletConnection();
-                if (address) {
-                    walletAddress.textContent = `${address.slice(0,6)}...${address.slice(-4)}`;
-                    connectionStatus.innerHTML = '<span class="status-indicator status-connected"></span>Connected';
-                    deployButton.disabled = false;
-                    walletStatus.style.display = 'block';
-                    searcherState.textContent = 'Searcher Ready - Deploy to Begin';
-                }
-            });
+            if(connectButton) {
+                connectButton.addEventListener('click', async function() {
+                    const address = await window.initWalletConnection();
+                    if (address) {
+                        walletAddress.textContent = `${address.slice(0,6)}...${address.slice(-4)}`;
+                        connectionStatus.innerHTML = '<span class="status-indicator status-connected"></span>Connected';
+                        deployButton.disabled = false;
+                        walletStatus.style.display = 'block';
+                        searcherState.textContent = 'Searcher Ready - Deploy to Begin';
+                    }
+                });
+            }
             
             // MEV Simulator
-            const simulator = new MEVSimulator();
-            simulator.startSimulation('log-container');
+            if(typeof MEVSimulator !== 'undefined') {
+                const simulator = new MEVSimulator();
+                simulator.startSimulation('log-container');
+            }
             
             // Analytics updater
             setInterval(updateAnalytics, 5000);
@@ -236,10 +240,15 @@
             const efficiency = (95 + Math.random() * 5).toFixed(1);
             const latency = Math.floor(8 + Math.random() * 15);
             
-            document.getElementById('total-profit').textContent = `${totalProfit} ETH`;
-            document.getElementById('active-strategies').textContent = strategies;
-            document.getElementById('gas-efficiency').textContent = `${efficiency}%`;
-            document.getElementById('network-latency').textContent = `${latency}ms`;
+            const profitEl = document.getElementById('total-profit');
+            const strategiesEl = document.getElementById('active-strategies');
+            const efficiencyEl = document.getElementById('gas-efficiency');
+            const latencyEl = document.getElementById('network-latency');
+            
+            if(profitEl) profitEl.textContent = `${totalProfit} ETH`;
+            if(strategiesEl) strategiesEl.textContent = strategies;
+            if(efficiencyEl) efficiencyEl.textContent = `${efficiency}%`;
+            if(latencyEl) latencyEl.textContent = `${latency}ms`;
         }
     </script>
 </body>
